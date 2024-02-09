@@ -1,7 +1,7 @@
 import java.util.*
 import kotlin.collections.HashMap
 
-class RequestTimestamps(private val requests: Int, private val windowTimeInSec: Int) {
+class RequestTimestamps(private val requestLimit: Int, private val windowTimeInSec: Int) {
     private val timestamps = ArrayDeque<Long>()
     private val lock = Object()
 
@@ -22,38 +22,38 @@ class RequestTimestamps(private val requests: Int, private val windowTimeInSec: 
     fun shouldAllowRequest(currentTimestamp: Long): Boolean {
         synchronized(lock) {
             evictOlderTimestamps(currentTimestamp)
-            return timestamps.size <= requests
+            return timestamps.size < requestLimit
         }
     }
 }
 
 class SlidingWindowLogsRateLimiter {
     //rateLimiterMap here corresponds to redis cluster created per userId
-    private val ratelimiterMap = HashMap<Int, RequestTimestamps>()
+    private val rateLimiterMap = HashMap<Int, RequestTimestamps>()
     private val lock = Object()
 
     fun addUser(userId: Int, requests: Int = 100, windowTimeInSec: Int = 60) {
         synchronized(lock) {
-            if (ratelimiterMap.containsKey(userId)) {
+            if (rateLimiterMap.containsKey(userId)) {
                 throw IllegalArgumentException("User already present")
             }
-            ratelimiterMap[userId] = RequestTimestamps(requests, windowTimeInSec)
+            rateLimiterMap[userId] = RequestTimestamps(requests, windowTimeInSec)
         }
     }
 
     fun removeUser(userId: Int) {
         synchronized(lock) {
-            ratelimiterMap.remove(userId)
+            rateLimiterMap.remove(userId)
         }
     }
 
-    fun getCurrentTimestampInSec(): Long {
+    private fun getCurrentTimestampInSec(): Long {
         return System.currentTimeMillis() / 1000
     }
 
     fun shouldAllowServiceCall(userId: Int): Boolean {
         synchronized(lock) {
-            val userTimestamps = ratelimiterMap[userId] ?: throw IllegalArgumentException("User is not present. Please whitelist and register the user for service")
+            val userTimestamps = rateLimiterMap[userId] ?: throw IllegalArgumentException("User is not present. Please whitelist and register the user for service")
             val currentTimestamp = getCurrentTimestampInSec()
             if (!userTimestamps.shouldAllowRequest(currentTimestamp)) {
                 return false
