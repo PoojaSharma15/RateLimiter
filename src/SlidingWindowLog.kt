@@ -1,12 +1,11 @@
 import java.util.*
 import kotlin.collections.HashMap
-import kotlin.concurrent.withLock
 
 class RequestTimestamps(private val requests: Int, private val windowTimeInSec: Int) {
     private val timestamps = ArrayDeque<Long>()
     private val lock = Object()
 
-    fun evictOlderTimestamps(currentTimestamp: Long) {
+    private fun evictOlderTimestamps(currentTimestamp: Long) {
         synchronized(lock) {
             while (timestamps.isNotEmpty() && currentTimestamp - timestamps.first() > windowTimeInSec) {
                 timestamps.removeFirst()
@@ -29,6 +28,7 @@ class RequestTimestamps(private val requests: Int, private val windowTimeInSec: 
 }
 
 class SlidingWindowLogsRateLimiter {
+    //rateLimiterMap here corresponds to redis cluster created per userId
     private val ratelimiterMap = HashMap<Int, RequestTimestamps>()
     private val lock = Object()
 
@@ -69,7 +69,7 @@ fun main() {
     limiter.addUser(1)
 
     // Simulate service calls
-    for (i in 0 until 200) {
+    for (i in 0..<200) {
         if (limiter.shouldAllowServiceCall(1)) {
             println("Service call allowed")
         } else {
